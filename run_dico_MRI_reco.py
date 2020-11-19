@@ -67,7 +67,7 @@ The solution is obtained by alternatively updating the dictionary and the
 sparse codes and the reconstruction estimate for (P1) and only the sparse codes 
 and the reconstruction update for (P2), i.e. D is fixed
 
-We provide the reconstruction code for a 2D cine MRI image with Nt=20 cardiach phases.
+We provide the reconstruction code for a 2D cine MRI image with Nt=20 cardiac phases.
 
 In order to keep the example as simple as possible, the k-space trajectories,
 the density compensation functions and the coil-sensitivity maps were previously
