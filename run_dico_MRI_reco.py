@@ -27,8 +27,7 @@ from dictionary_learning_funcs import *
 import os
 
 import argparse
-parser = argparse.ArgumentParser()
-#params for the dataset;				
+parser = argparse.ArgumentParser()				
 parser.add_argument('--sigma',default=1e-6,type=float)		 	    #noise level in the k-spcae data
 parser.add_argument('--Psi_training',default=1,type=int)		    #wheter to train the dictionary during the reconstruction or not;
 parser.add_argument('--npcg',default=4,type=int)	 			        #number of PCG-updates for updaing the solution estimate	
@@ -57,37 +56,33 @@ by M. Pali et al., Medical Physics 2020
 
 We consider the two reconstruction problems given by
 
-min_{x,D,{\gamma}_j} ||Ex -y||_2^2 + \sum_j ||R_j x - D\gamma_j||_2^2 + ||\gamma_j||_0, (P1)
+min_{x,D,{\gamma_j}_j} ||Ex -y||_2^2 + \sum_j ||R_j x - D\gamma_j||_2^2 + ||\gamma_j||_0, (P1)
 
 and 
 
-min_{x,{\gamma}_j} ||Ex -y||_2^2 + \sum_j ||R_j x - D\gamma_j||_2^2 + ||\gamma_j||_0, (P2)
+min_{x,{\gamma_j}_j} ||Ex -y||_2^2 + \sum_j ||R_j x - D\gamma_j||_2^2 + ||\gamma_j||_0, (P2)
 
 
 The solution is obtained by alternatively updating the dictionary and the 
 sparse codes and the reconstruction estimate for (P1) and only the sparse codes 
 and the reconstruction update for (P2), i.e. D is fixed
 
-We provide the reconstruction code for two phantoms
-i) a 3D image containing randomly chosen elipses
-ii) a 3D shepp logan phantom
+We provide the reconstruction code for a 2D cine MRI image with Nt=20 cardiach phases.
 
 In order to keep the example as simple as possible, the k-space trajectories,
 the density compensation functions and the coil-sensitivity maps were previously
 calculated.
 
 We provide an implementation of the 2D radial non-uniform FFT (NUFFT) encoding-operator.
-In this example, the NUFFT operator samples the image of shape (160,160,30)
+In this example, the NUFFT operator samples the image of shape (320,320,20)
 along pre-defined k-space trajectories.
 For details about the library Torch KB-NUFFT please see
 https://github.com/mmuckley/torchkbnufft
 
 The density compensation function was previously calculated using the 
-voronoi-neighbourhodd of each k-spade point
-
+voronoi-neighbourhodd of each k-spade point.
 
 """
-
 
 """
 Define parameters to create folder for results and create data;

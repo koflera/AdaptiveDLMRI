@@ -1,0 +1,1 @@
+a few pre-trained dictionaries trained on a set of patches of "ground-truth" cine MR images
