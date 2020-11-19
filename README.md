@@ -23,7 +23,7 @@ If you use the code or find it useful, please cite our work:
 
 @article{pali2020adaptive,
   title={Adaptive Sparsity Level and Dictionary Size Estimation for Image Reconstruction in Accelerated 2D Radial Cine MRI},
-  author={Pali, Marie-Christine and Schaeffter, Tobias and Kolbitsch, Christoph and Koer, Andreas},
+  author={Pali, Marie-Christine and Schaeffter, Tobias and Kolbitsch, Christoph and Kofler, Andreas},
   journal={Medical Physics},
   year={2020},
   DOI={10.1002/mp.14547},
