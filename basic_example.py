@@ -7,10 +7,12 @@ Created on Wed Nov 18 2020
 """
 
 import numpy as np
-from data_processing_funcs import *
+from data_processing_funcs import img2patches, patches2img, center_data, un_center_data, construct_weight_matrix
 
-from dictionary_learning_funcs import *
+from dictionary_learning_funcs import learn_dico_from_data, sparse_approx
 from sklearn import preprocessing
+
+import matplotlib.pyplot as plt
 
 """
 basic toy example for training a dictionary on a set of patches extracted
@@ -22,8 +24,6 @@ from an image and sparesly approximate the patches;
 #SC must be either omp or a_omp_plus1
 DL = 'a_itkrm'
 SC = 'a_omp_plus1'
-
-
 
 #K and S (have no effect if adaptive DL and SC are used)
 K=128
@@ -88,11 +88,14 @@ cmap=plt.cm.Greys_r
 clim=[0,1000]
 ax[0].imshow(x,cmap=cmap,clim=clim)
 ax[1].imshow(xDL_reg,cmap=cmap,clim=clim)
+
+#pathname
+pname = 'results/denoising_example/'
+
 #filename
 if DL in ['itkrm','ksvd']:
 	fname = 'denoising_example_{}_{}_S{}_K{}.pdf'.format(DL,SC,S,K)
 elif DL=='a_itkrm':
 	fname = 'denoising_example_aitkrm_aomp.pdf'
-	
-pname = 'results/denoising_example/'
+
 fig.savefig(pname+fname)
