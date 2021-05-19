@@ -11,11 +11,9 @@ import matplotlib.pyplot as plt
 plt.ioff()
 
 import numpy as np
-from sklearn.feature_extraction import image
 
-import os
 from termcolor import colored
-from sklearn.decomposition import DictionaryLearning 
+
 from sklearn.linear_model import OrthogonalMatchingPursuit
 from sklearn import preprocessing
 from ksvd import ApproximateKSVD
@@ -650,27 +648,13 @@ def sparse_approx(data,dico,sparse_coding_algo,S):
 		print(colored('time needed for omp: {}'.format( t1-t0),'green'))
 		data = np.dot(dico,code.transpose()).transpose() 
 
-	else:
-		
-		if sparse_coding_algo=='a_omp_plus1':
-			t0 = time.time()
-			code = a_omp_plus1(dico,data)
-			t1 = time.time()
-			print(colored('time needed for a_omp_plus1: {}'.format( t1-t0),'green'))
+	elif sparse_coding_algo=='a_omp_plus1':
+		t0 = time.time()
+		code = a_omp_plus1(dico,data)
+		t1 = time.time()
+		print(colored('time needed for a_omp_plus1: {}'.format( t1-t0),'green'))
 			
-		elif sparse_coding_algo=='a_omp':
-			t0 = time.time()
-			code = a_omp(dico,data)
-			t1  = time.time()
-			print(colored('time needed for a_omp: {}'.format( t1-t0),'green'))
-			
-		elif sparse_coding_algo=='APm':
-			t0 = time.time()
-			code = APm(data,dico)
-			t1  = time.time()
-			print(colored('time needed for APm: {}'.format( t1-t0),'green'))
-			
-		#sarse approx as matrix-vector multiplication;
+		#sparse approx as matrix-vector multiplication;
 		data = np.dot(dico,code).transpose() 
 	
 	t_sc = time.time() - t_sc  
