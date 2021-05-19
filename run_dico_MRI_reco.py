@@ -9,8 +9,6 @@ import numpy as np
 
 import torch
 
-import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 plt.ioff()
 
@@ -18,29 +16,35 @@ import matplotlib.gridspec as gridspec
 
 from sklearn import preprocessing
 
-from nufft_operator import *
+from nufft_operator import Dyn2DRadEncObj
+from operator_helper_funcs import ConjGrad, HOperator, add_gaussian_noise, np2torch, torch2np
 
-from data_processing_funcs import *
+from data_processing_funcs import img2patches, patches2img, center_data, un_center_data, construct_weight_matrix
 
-from dictionary_learning_funcs import *
+from dictionary_learning_funcs import learn_dico_from_data, sparse_approx
 
 import os
 
+from termcolor import colored
+
+import time
+
 import argparse
 parser = argparse.ArgumentParser()				
-parser.add_argument('--sigma',default=1e-6,type=float)		 	    #noise level in the k-spcae data
-parser.add_argument('--Psi_training',default=1,type=int)		    #wheter to train the dictionary during the reconstruction or not;
-parser.add_argument('--npcg',default=4,type=int)	 			        #number of PCG-updates for updaing the solution estimate	
-parser.add_argument('--N',default=20000,type=int)	 			        #number of patches used for training the dictionary online
-parser.add_argument('--n_DL',default=20,type=int)				        #number of iterations of the respective DL algorthm			
-parser.add_argument('--T',default=12,type=int)	 				        #number overall iterations					
-parser.add_argument('--lambda_reg',default=1.,type=float)  		  #the regularization parameter 
-parser.add_argument('--DL',default='a_itkrm',type=str)			    #DL-algorithm - either "kvd", "itkrm" or "a_itkrm"								
-parser.add_argument('--SC',default='a_omp_plus1',type=str)		  #SC-algorhm - either "omp" or "a_omp_plus1"
-parser.add_argument('--K',default=64,type=int)		 			        #number of atoms of the dictionary; only has an effect for kvd and itkrm								
-parser.add_argument('--S',default=8,type=int)	 				   	      #sparsity level; only has an aeffect for ksvd and itkrm
-parser.add_argument('--mumax',default=0.7,type=float)			      #coherence mumax for a_itkrm;
+parser.add_argument('--sigma',default=1e-2,type=float)		 	    #noise level in the k-space data
+parser.add_argument('--Psi_training',default=0,type=int)		    #wheter to train the dictionary during the reconstruction or not;
+parser.add_argument('--npcg',default=4,type=int)	 			    #number of PCG-updates for updaing the solution estimate	
+parser.add_argument('--N',default=20000,type=int)	 			    #number of patches used for training the dictionary online
+parser.add_argument('--n_DL',default=20,type=int)				    #number of iterations of the respective DL algorthm			
+parser.add_argument('--T',default=6,type=int)	 				    #number overall iterations					
+parser.add_argument('--lambda_reg',default=1.,type=float)  		  	#the regularization parameter 
+parser.add_argument('--DL',default='a_itkrm',type=str)			  	#DL-algorithm - either "kvd", "itkrm" or "a_itkrm"								
+parser.add_argument('--SC',default='a_omp_plus1',type=str)		  	#SC-algorhm - either "omp" or "a_omp_plus1"
+parser.add_argument('--K',default=64,type=int)		 			  	#number of atoms of the dictionary; only has an effect for kvd and itkrm								
+parser.add_argument('--S',default=8,type=int)	 				   	#sparsity level; only has an aeffect for ksvd and itkrm
+parser.add_argument('--mumax',default=0.7,type=float)			    #coherence mumax for a_itkrm;
 parser.add_argument('--minobs_str',default='d',type=str)		    #minimal number of observations M for aitkrm
+parser.add_argument('--use_GPU',default=1,type=int)		 	 	 	#minimal number of observations M for aitkrm
 args = parser.parse_args()
 
 """"
@@ -91,6 +95,9 @@ Define parameters to create folder for results and create data;
 im_size = [320,320,20]
 Nx,Ny,Nt = im_size
 
+#whether to use a GPU for the radial operator
+use_GPU = args.use_GPU
+
 #the reconstructin parameters;
 T = args.T
 strides=[2,2,2]
@@ -125,7 +132,7 @@ cwd = os.getcwd()
 if not os.path.exists(cwd+'/results/MRI_reco'):
 	os.mkdir(cwd+'/results/MRI_reco')
 	
-results_folder = cwd+'/results/MRI_reco/'.format(Psi_str) + experiment_folder
+results_folder = cwd+'/results/MRI_reco/{}/'.format(Psi_str) + experiment_folder
 dico_folder = results_folder  + '/dico_folder/'
 if not os.path.exists(results_folder):
 	
@@ -135,39 +142,60 @@ if not os.path.exists(results_folder):
 #define the phantom
 np.random.seed(0)
 
+#load ground-truth immage
 xf  = np.load('data/img_320.npy')
 
-#make a tensor out of it
-xf_tensor = np2torch(xf)
+#convert to tensor
+xf_tensor = np2torch(xf, use_GPU = use_GPU)
 
-#load k-space trajectories; has shape  (1, 2, Nrad,Nt), where Nrad=2*Ny*n_spokes
-ktraj = np.load('data/ktraj_320.npy')
-ktraj_tensor = torch.tensor(ktraj,device='cuda')
+#load k-space trajectories of shape (Nrad,20)
+ktraj = np.load('data/ktraj_320.npy') 
 
-#csms; the have shape (1,ncoils, 2, Nx,Ny)
-csmap = np.load('data/csmap_320.npy')
-csmap_tensor = torch.tensor(csmap,device='cuda')
+#convert to tensor of shape (1,2,Nrad,20)
+ktraj_tensor =  torch.stack([torch.tensor(ktraj.real),torch.tensor(ktraj.imag)],dim=0).unsqueeze(0)
 
-#density compensation function
-dcomp = np.load('data/dcomp_320.npy')
-dcomp_tensor = torch.tensor(dcomp,device='cuda')
-	
+#load complex-valued coil-sensitivy maps of shape (12,320,320)
+csmap = np.load('data/csmap_320.npy')  
+
+#convert to tensor of shape (1,12,2,320,320)
+csmap_tensor = torch.stack([torch.tensor(csmap.real),torch.tensor(csmap.imag)],dim=1).unsqueeze(0) 
+
+#load density compensation function
+dcomp = np.load('data/dcomp_320.npy')  #shape (Nrad,20)
+
+#convert to tensor of shape (1,1,1,Nrad,20)
+dcomp_tensor = torch.tensor(dcomp).unsqueeze(0).unsqueeze(0).unsqueeze(0) 
+
+if use_GPU:
+	ktraj_tensor = ktraj_tensor.cuda()
+	csmap_tensor = csmap_tensor.cuda()
+	dcomp_tensor = dcomp_tensor.cuda()
+
 #define the encoding operator object
 print(colored('Define the Objects;','green'))
-EncObject = My2DRadEncOp(im_size,ktraj_tensor,dcomp_tensor,csmap_tensor)
+EncObject = Dyn2DRadEncObj(im_size,ktraj_tensor,dcomp_tensor,csmap_tensor)
+
+if use_GPU:
+	EncObject = EncObject.cuda()
 
 print(colored('apply the forward operator ;','green'))
 np.random.seed(0)
 sigma=args.sigma
-ku_data = EncObject.apply_forward(xf_tensor)
+
+ku_data = EncObject.apply_A(xf_tensor)
 ku_data = add_gaussian_noise(ku_data,sigma=sigma)
 
 print(colored('apply the adjoint operator ;','green'))
-xu_tensor = EncObject.apply_adjoint(ku_data)
-xu = torch2np(xu_tensor)
+xu_tensor = EncObject.apply_Adag(ku_data)
+
+#convert to numpy array
+xu = torch2np(xu_tensor, use_GPU = use_GPU)
 
 #define the H operator which is needed for the reconstruction update;
-HOp = MyHOperator(EncObject.apply_EHE,lambda_reg)
+HOp = HOperator(EncObject.apply_AdagA_Toeplitz, lambda_reg)
+
+#initialize conjugate gradient object
+CG = ConjGrad()
 
 #initialize first estimate of the solution;
 xk_tensor = xu_tensor.clone()
@@ -192,7 +220,7 @@ for admm_iter in range(T):
 	###########################################################
 	
 	#move to cpu for extracting patches and centering the data;
-	xk = torch2np(xk_tensor.cpu())
+	xk = torch2np(xk_tensor, use_GPU = use_GPU)
 	
 	#i) pre-process initial image: extract patches, center and reshape it;
 	Pxkr = img2patches(np.real(xk),patches_size,strides,vectorized=True)
@@ -284,7 +312,7 @@ for admm_iter in range(T):
 	xDL_reg = patches2img(Pxk, im_size, patches_size, strides,Wmat = Wmat, vectorized=True)
 		
 	#convert to pytorch
-	xDL_reg_tensor = np2torch(xDL_reg)
+	xDL_reg_tensor = np2torch(xDL_reg, use_GPU = use_GPU)
 	
 	###########################################################
 	# block 3--> solve the linear system;
@@ -294,11 +322,13 @@ for admm_iter in range(T):
 	rhs = xu_tensor + lambda_reg*xDL_reg_tensor
 	
 	#perform CG;
-	print(colored('do CG','green'))
+	print(colored('update image estimate using CG','green'))
 	t0_PCG = time.time()
 	
-	#solve the system
-	xk_tensor = MyCGSolver(HOp, rhs, xk_tensor,niter=npcg,print_norm=True) 
+	#solve the system 
+	xk_tensor = CG(HOp, xk_tensor, rhs, niter = npcg )
+	
+	#track time
 	t1_PCG = time.time()-t0_PCG
 	t_PCG_total+=t1_PCG
 	
@@ -316,62 +346,57 @@ if DL=='a_itkrm':
 	np.save(results_folder+'K_vect.npy',K_vect)
 
 #save the solution; #convert it to numpy-array
-xDL_reg = torch2np(xk_tensor.cpu())
+xDL_reg = torch2np(xk_tensor, use_GPU = use_GPU)
 
 #save the final reconstruction
 np.save(results_folder+'xDL_reg.npy',xDL_reg)
 
-fig = plt.figure(figsize=(9*5,4*5))
-gs = gridspec.GridSpec(2,9, hspace = 0.05, wspace = -0.05,width_ratios=[1,1,4,1,1,4,1,1,4])
+#create figure
+fig = plt.figure(figsize=(6*5,4*5))
+gs = gridspec.GridSpec(2,6, 
+					   hspace = 0.05, wspace = 0.1, height_ratios= [1,1], width_ratios = [1,8,1,8,1,8])
 cutoff = 80
+kt=15
+kx=52
 Nx,Ny,Nt = im_size	
-arrs_list = [xu,xDL_reg,xf]
-errs_list = [xu-xf,xDL_reg-xf,xf-xf]
+arrs_list = [xu, xDL_reg, xf]
+errs_list = [np.abs(xu-xf), np.abs(xDL_reg-xf), np.zeros(xf.shape)]
 clim=[0,1000]
 ks=0
-font_size=16
+font_size=20
+clim_img = plt.cm.Greys_r
+clim_err = plt.cm.viridis
 arr_titles = np.array([
-	['NUFFT; yt-view', 'xt-view', 'xy-view'],
-			  ['DL-reg; yt-view', 'xt-view', 'xy-view'],
-			  ['GT; yt-view', 'xt-view', 'xy-view'],		  
+	['yt-view',  'NUFFT - xy-view'],
+			  ['yt-view', 'DL-reg - xy-view'],
+			  ['yt-view', 'GT - xy-view'],		  
 			  ])
 	  		  
 for k in range(3):
 	 fig.add_subplot(gs[0,ks])
-	 plt.imshow(np.abs(arrs_list[k][cutoff:Nx-cutoff,80,:]),cmap=plt.cm.Greys_r,clim=clim)
+	 plt.imshow(np.abs(arrs_list[k][cutoff:Nx-cutoff,kx,:]),cmap=clim_img,clim=clim)
 	 plt.xticks([])
 	 plt.yticks([])
 	 plt.title(arr_titles[k,0],fontsize=font_size)
 	 
 	 fig.add_subplot(gs[0,ks+1])
-	 plt.imshow(np.abs(arrs_list[k][80,cutoff:N-cutoff,:]),cmap=plt.cm.Greys_r,clim=clim)
+	 plt.imshow(np.abs(arrs_list[k][cutoff:Nx-cutoff,cutoff:Ny-cutoff,kt]),cmap=clim_img,clim=clim)
 	 plt.xticks([])
 	 plt.yticks([])
 	 plt.title(arr_titles[k,1],fontsize=font_size)
 	 
-	 fig.add_subplot(gs[0,ks+2])
-	 plt.imshow(np.abs(arrs_list[k][cutoff:Nx-cutoff,cutoff:Ny-cutoff,15]),cmap=plt.cm.Greys_r,clim=clim)
-	 plt.xticks([])
-	 plt.yticks([])
-	 plt.title(arr_titles[k,2],fontsize=font_size)
-	 
 	 #the respective errors
 	 fig.add_subplot(gs[1,ks])
-	 plt.imshow(3*np.abs(errs_list[k][cutoff:Nx-cutoff,80,:]),cmap=plt.cm.viridis,clim=clim)
+	 plt.imshow(3*np.abs(errs_list[k][cutoff:Nx-cutoff,kx,:]),cmap=clim_err,clim=clim)
 	 plt.xticks([])
 	 plt.yticks([])
 
 	 fig.add_subplot(gs[1,ks+1])
-	 plt.imshow(3*np.abs(errs_list[k][80,cutoff:N-cutoff,:]),cmap=plt.cm.viridis,clim=clim)
+	 plt.imshow(3*np.abs(errs_list[k][cutoff:Nx-cutoff,cutoff:Ny-cutoff,kt]),cmap=clim_err,clim=clim)
 	 plt.xticks([])
 	 plt.yticks([])
 
-	 fig.add_subplot(gs[1,ks+2])
-	 plt.imshow(3*np.abs(errs_list[k][cutoff:Nx-cutoff,cutoff:Ny-cutoff,15]),cmap=plt.cm.viridis,clim=clim)
-	 plt.xticks([])
-	 plt.yticks([])
-
-	 ks+=3
+	 ks+=2
 	 
 if DL in ['ksvd','itkrm']:
 	fig.savefig(results_folder+'DL_reco_{}_{}_K{}_S{}_{}.pdf'.format(DL,SC,K,S,Psi_str),layout='tight',pad_inches=0)

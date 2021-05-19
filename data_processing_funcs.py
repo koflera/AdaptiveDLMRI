@@ -8,17 +8,6 @@ import numpy as np
 
 from sklearn.feature_extraction import image
 
-from numpy.fft import fftshift, ifftshift, fftn, ifftn, fft2, ifft2, ifft, fft
-
-import torch
-
-from scipy import ndimage
-
-from skimage.transform import resize
-
-from termcolor import colored
-
-
 def patches2img(Pr,target_size,patches_size,strides,Wmat=None,vectorized=False):
 
 	"""
