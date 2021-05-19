@@ -11,10 +11,6 @@ With the code you should be able to run the reconstruction algorithm for three d
 As a toy example, you can apply DL and SC for denosing an image. For this, just run the script basic_example.py.
 The image was borrowed from http://www.cse.yorku.ca/~mridataset/.
 
-For running the whole image reconstruction pipeline, you can simply execute the bash file.
->> N.B. Currently, the NUFFT-operator is not provided as it is used in another project as well. Its implementation will be provided at a later point.
-
-
 For all theoretical aspects of aTIKrM and aOMP, please visit Karin Schnass' website: https://www.uibk.ac.at/mathematik/personal/schnass/.
 
 The code was written by M. C. Pali and A. Kofler at the University of Innsbruck (Austria), the Physikalisch-Technische Bundesanstalt, Berlin and Braunschweig and at the Charité - Universitätsmedizin Berlin.
@@ -29,3 +25,10 @@ If you use the code or find it useful, please cite our work:
   DOI={10.1002/mp.14547},
   publisher={Wiley Online Library}
 }
+
+## For running the code, you will need the following main packages:
+- PyTorch: 1.6.0.
+- TorchKbNufft: 0.3.4.
+- Numpy: 1.19.2.
+- SciKit-Learn: 0.23.2.
+- ksvd: 0.0.3.
