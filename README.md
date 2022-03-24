@@ -9,7 +9,7 @@ by M.C. Pali, T. Schaeffter, C. Kolbitsch and A. Kofler.
 With the code you should be able to run the reconstruction algorithm for three different combinations of dictionary learning (DL) and sparse coding (SC)  algorithms, i.e. K-SVD + OMP, ITKrM + OMP and aITKrM + aOMP as shown in the paper.
 
 As a toy example, you can apply DL and SC for denosing an image. For this, just run the script basic_example.py.
-The image was borrowed from http://www.cse.yorku.ca/~mridataset/.
+The image was borrowed from http://jtl.lassonde.yorku.ca/software/datasets/.
 
 For all theoretical aspects of aTIKrM and aOMP, please visit Karin Schnass' website: https://www.uibk.ac.at/mathematik/personal/schnass/.
 
